@@ -9,9 +9,9 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 
-from backend import database, scheduler
+from backend import database, scheduler, data_fetcher, content_generator
 from backend.image_api import NanoBananaClient
-from backend.scheduler import run_daily_generation
+from backend.scheduler import run_daily_generation, run_market_refresh
 from backend.video_studio import generate_scene_prompts
 
 log = logging.getLogger(__name__)
@@ -72,12 +72,60 @@ def approve_section(date, section):
 
 @app.route("/api/generate", methods=["POST"])
 def generate_now():
-    success = run_daily_generation()
+    today = datetime.now().strftime("%Y-%m-%d")
+    existing = database.get_content(today)
+    req_data = request.get_json(silent=True) or {}
+    force_all = req_data.get("force_all", False)
+
+    if existing and not force_all:
+        # Content already exists today → only refresh market summary
+        success = run_market_refresh()
+        mode = "market_refresh"
+    else:
+        # First time today (or force) → generate everything
+        success = run_daily_generation()
+        mode = "full_generation"
+
     if success:
-        today = datetime.now().strftime("%Y-%m-%d")
         content = database.get_content(today)
-        return jsonify({"ok": True, "content": content})
+        return jsonify({"ok": True, "content": content, "mode": mode})
     return jsonify({"error": "שגיאה ביצירת תוכן, בדוק את הלוגים"}), 500
+
+
+@app.route("/api/generate/section/<section>", methods=["POST"])
+def generate_section_now(section):
+    """Regenerate a single section without touching anything else."""
+    import json as _json
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        market_data = data_fetcher.fetch_market_data()
+        news = data_fetcher.fetch_globes_news()
+
+        generators = {
+            "market_summary":      lambda: content_generator.generate_market_summary(market_data),
+            "investment_tip":      lambda: content_generator.generate_investment_tip(),
+            "news_analysis":       lambda: content_generator.generate_news_analysis(news),
+            "stock_of_week":       lambda: content_generator.generate_stock_of_week(market_data),
+            "investor_psychology": lambda: content_generator.generate_investor_psychology(),
+            "weekly_events":       lambda: content_generator.generate_weekly_events(),
+            "facebook_post":       lambda: content_generator.generate_facebook_post(market_data, news),
+            "instagram_carousel":  lambda: content_generator.generate_instagram_carousel(market_data),
+            "instagram_story":     lambda: content_generator.generate_instagram_story(market_data),
+        }
+
+        if section not in generators:
+            return jsonify({"error": f"Unknown section: {section}"}), 400
+
+        text = generators[section]()
+        # Ensure row exists for today before updating
+        if not database.get_content(today):
+            database.save_draft(date=today)
+        database.update_section(today, section, text)
+        return jsonify({"ok": True, "text": text})
+    except Exception as exc:
+        log.exception("Section generation failed: %s", section)
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/history", methods=["GET"])

@@ -11,8 +11,9 @@ _scheduler = BackgroundScheduler(timezone="Asia/Jerusalem")
 
 
 def run_daily_generation():
+    """Full generation — creates all 9 sections. Used on first run of the day."""
     today = datetime.now().strftime("%Y-%m-%d")
-    log.info(f"Starting daily content generation for {today}")
+    log.info(f"Starting FULL content generation for {today}")
     try:
         market_data = data_fetcher.fetch_market_data()
         news = data_fetcher.fetch_globes_news()
@@ -27,6 +28,27 @@ def run_daily_generation():
         return True
     except Exception as e:
         log.error(f"Content generation failed: {e}", exc_info=True)
+        return False
+
+
+def run_market_refresh():
+    """Light refresh — only updates market_summary (market already exists for today)."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    log.info(f"Starting MARKET REFRESH for {today}")
+    try:
+        market_data = data_fetcher.fetch_market_data()
+        news = data_fetcher.fetch_globes_news()
+        market_summary = content_generator.generate_market_summary(market_data)
+        database.save_draft(
+            date=today,
+            market_summary=market_summary,
+            raw_market_data=__import__("json").dumps(market_data, ensure_ascii=False),
+            raw_news=__import__("json").dumps(news, ensure_ascii=False),
+        )
+        log.info(f"Market refresh complete for {today}")
+        return True
+    except Exception as e:
+        log.error(f"Market refresh failed: {e}", exc_info=True)
         return False
 
 

@@ -63,6 +63,20 @@ async function loadContent() {
 
   refreshCurrentTab();
   loadHistory();
+  updateGenerateButton();
+}
+
+function updateGenerateButton() {
+  const btn = document.getElementById('btn-generate');
+  if (!btn) return;
+  const isToday = currentDate === todayStr();
+  if (isToday && currentContent) {
+    btn.textContent = '🔄 עדכן סיכום שוק';
+    btn.title = 'תוכן קיים להיום — ילחץ יעדכן רק את סיכום השוק';
+  } else {
+    btn.textContent = '✨ צור תוכן עכשיו';
+    btn.title = '';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -84,6 +98,7 @@ function renderWhatsapp() {
       <div class="card-header">
         <span class="card-title">${label}${approved ? ' ✅' : ''}</span>
         <div class="card-actions">
+          <button class="btn btn-ghost btn-sm copy-btn" onclick="copySection('${key}')" title="העתק טקסט">📋</button>
           <button class="btn btn-regen" onclick="regenSection('${key}')" ${approved ? 'disabled' : ''}>🔄 חדש</button>
           <button class="btn btn-ghost" onclick="toggleEdit('${key}')">✏️ ערוך</button>
           <button class="btn btn-approve${approved ? ' approved' : ''}" id="approve-btn-${key}"
@@ -103,6 +118,13 @@ function renderWhatsapp() {
     area.appendChild(card);
   });
   checkAllApproved();
+}
+
+function copySection(key) {
+  const text = currentContent?.[key] || '';
+  navigator.clipboard.writeText(text).then(() => {
+    if (window.showToast) showToast('✅ הועתק!');
+  });
 }
 
 function toggleEdit(key) {
@@ -165,28 +187,34 @@ function copyAll() {
 
 async function regenSection(key) {
   const display = document.getElementById(`display-${key}`);
+  const origText = currentContent?.[key] || '';
   display.textContent = '⏳ מייצר מחדש...';
   try {
-    const res = await fetch(`${API}/generate`, { method: 'POST' });
+    const res = await fetch(`${API}/generate/section/${key}`, { method: 'POST' });
     const data = await res.json();
-    if (data.ok && data.content) {
-      currentContent = data.content;
-      display.textContent = data.content[key] || '';
+    if (data.ok) {
+      currentContent[key] = data.text;
+      display.textContent = data.text;
       const editor = document.getElementById(`editor-${key}`);
-      if (editor) editor.value = data.content[key] || '';
-      if (window.renderFacebook) renderFacebook();
-      if (window.renderInstagram) renderInstagram();
+      if (editor) editor.value = data.text;
+      if (window.showToast) showToast('✅ נוצר מחדש!');
+    } else {
+      display.textContent = origText;
+      alert('שגיאה: ' + (data.error || 'לא ידוע'));
     }
-  } catch { display.textContent = currentContent[key] || ''; }
+  } catch {
+    display.textContent = origText;
+  }
 }
 
 // ── Generate ──────────────────────────────────────────────────
 async function generateContent() {
   const btn = document.getElementById('btn-generate');
   const badge = document.getElementById('status-badge');
+  const isRefresh = currentContent && currentDate === todayStr();
   btn.disabled = true;
-  btn.innerHTML = '✨ מייצר... <span class="spinner"></span>';
-  badge.className = 'badge badge-loading'; badge.textContent = 'מייצר...';
+  btn.innerHTML = `${isRefresh ? '🔄' : '✨'} ${isRefresh ? 'מעדכן שוק...' : 'מייצר...'} <span class="spinner"></span>`;
+  badge.className = 'badge badge-loading'; badge.textContent = isRefresh ? 'מעדכן...' : 'מייצר...';
 
   try {
     const res = await fetch(`${API}/generate`, { method: 'POST' });
@@ -199,7 +227,8 @@ async function generateContent() {
         if (el) el.textContent = hebrewDate(currentDate);
       });
       refreshCurrentTab();
-      badge.className = 'badge badge-success'; badge.textContent = 'נוצר ✅';
+      const successMsg = data.mode === 'market_refresh' ? 'שוק עודכן ✅' : 'נוצר ✅';
+      badge.className = 'badge badge-success'; badge.textContent = successMsg;
       loadHistory();
     } else {
       badge.className = 'badge badge-error'; badge.textContent = 'שגיאה ❌';
@@ -208,7 +237,8 @@ async function generateContent() {
   } catch {
     badge.className = 'badge badge-error'; badge.textContent = 'שגיאת חיבור';
   } finally {
-    btn.disabled = false; btn.textContent = '✨ צור תוכן עכשיו';
+    btn.disabled = false;
+    updateGenerateButton();
     setTimeout(() => { badge.className = 'badge badge-idle'; badge.textContent = 'מוכן'; }, 4000);
   }
 }

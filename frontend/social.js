@@ -18,7 +18,8 @@ function renderFacebook() {
       <div class="card-header">
         <span class="card-title">📘 פוסט פייסבוק${approved ? ' ✅' : ''}</span>
         <div class="card-actions">
-          <button class="btn btn-ghost btn-sm" onclick="copyFbPost()">📋 העתק</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyFbPost()" title="העתק פוסט">📋 העתק</button>
+          <button class="btn btn-regen" onclick="regenFacebookPost()" title="צור פוסט חדש">🔄 חדש</button>
           <button class="btn btn-ghost" onclick="toggleFbEdit()">✏️ ערוך</button>
           <button class="btn btn-approve${approved ? ' approved' : ''}" id="approve-btn-facebook_post"
             onclick="${approved ? '' : "approveSocialSection('facebook_post')"}">${approved ? '✅ אושר' : '✅ אשר'}</button>
@@ -128,7 +129,9 @@ function renderCarousel() {
       <div class="card-header">
         <span class="card-title">🎠 קרוסלה אינסטגרם${approved ? ' ✅' : ''}</span>
         <div class="card-actions">
-          <button class="btn btn-ghost btn-sm" onclick="copyCarouselText()">📋 כל הטקסטים</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyCarouselText()" title="העתק את כל הטקסטים">📋 העתק</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadCarouselText()" title="הורד כקובץ טקסט">💾 הורד</button>
+          <button class="btn btn-regen" onclick="regenCarousel()" title="צור קרוסלה חדשה בנושא אחר">🔄 חדשה</button>
           <button class="btn btn-approve${approved ? ' approved' : ''}" id="approve-btn-instagram_carousel"
             onclick="${approved ? '' : "approveSocialSection('instagram_carousel')"}">${approved ? '✅ אושר' : '✅ אשר'}</button>
         </div>
@@ -251,7 +254,8 @@ function renderStory() {
       <div class="card-header">
         <span class="card-title">📖 סטורי אינסטגרם${approved ? ' ✅' : ''}</span>
         <div class="card-actions">
-          <button class="btn btn-ghost btn-sm" onclick="copyStory()">📋 העתק</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyStory()" title="העתק סטורי">📋 העתק</button>
+          <button class="btn btn-regen" onclick="regenStory()" title="צור סטורי חדש">🔄 חדש</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleStoryEdit()">✏️</button>
           <button class="btn btn-approve${approved ? ' approved' : ''}" id="approve-btn-instagram_story"
             onclick="${approved ? '' : "approveSocialSection('instagram_story')"}">${approved ? '✅ אושר' : '✅ אשר'}</button>
@@ -320,6 +324,80 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
+
+async function regenFacebookPost() {
+  const area = document.getElementById('fb-content-area');
+  area.innerHTML = '<div class="empty-state"><span class="spinner"></span> מייצר פוסט חדש...</div>';
+  try {
+    const res = await fetch(`/api/generate/section/facebook_post`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (window.currentContent) currentContent.facebook_post = data.text;
+      renderFacebook();
+      showToast('✅ פוסט פייסבוק חדש נוצר!');
+    } else {
+      renderFacebook();
+      alert('שגיאה: ' + (data.error || ''));
+    }
+  } catch { renderFacebook(); }
+}
+
+async function regenStory() {
+  const col = document.getElementById('ig-story-col');
+  if (col) col.innerHTML = '<div class="empty-state"><span class="spinner"></span> מייצר סטורי חדש...</div>';
+  try {
+    const res = await fetch(`/api/generate/section/instagram_story`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (window.currentContent) currentContent.instagram_story = data.text;
+      renderStory();
+      showToast('✅ סטורי חדש נוצר!');
+    } else {
+      renderStory();
+      alert('שגיאה: ' + (data.error || ''));
+    }
+  } catch { renderStory(); }
+}
+
+function downloadCarouselText() {
+  if (!_carouselData) return;
+  const lines = _carouselData.slides.map(s => {
+    const parts = [`── שקופית ${s.num} ──`];
+    if (s.headline) parts.push(s.headline);
+    if (s.sub)      parts.push(s.sub);
+    if (s.title)    parts.push(s.title);
+    if (s.body)     parts.push(s.body);
+    if (s.action)   parts.push(s.action);
+    return parts.join('\n');
+  });
+  const text = `קרוסלה: ${_carouselData.topic || ''}\n${'═'.repeat(30)}\n\n` + lines.join('\n\n');
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `carousel_${new Date().toISOString().split('T')[0]}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function regenCarousel() {
+  const col = document.getElementById('ig-carousel-col');
+  if (!col) return;
+  col.innerHTML = '<div class="empty-state"><span class="spinner"></span> מייצר קרוסלה חדשה...</div>';
+  try {
+    const res = await fetch(`/api/generate/section/instagram_carousel`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (window.currentContent) currentContent.instagram_carousel = data.text;
+      renderCarousel();
+      showToast('✅ קרוסלה חדשה נוצרה!');
+    } else {
+      col.innerHTML = `<div class="empty-state">❌ שגיאה: ${data.error || ''}</div>`;
+    }
+  } catch (e) {
+    col.innerHTML = `<div class="empty-state">❌ שגיאת חיבור</div>`;
+  }
 }
 
 function escHtml(str) {

@@ -1,15 +1,28 @@
 """
 Market data fetching — multi-source with fallback:
-  1. Yahoo Finance (crumb+cookie) — primary
-  2. CNBC Markets API              — fallback
-  3. "market closed" message       — last resort (Claude still writes a useful post)
+  1. yfinance library              — primary (handles auth internally)
+  2. Yahoo Finance (crumb+cookie)  — fallback
+  3. CNBC Markets API              — fallback 2
+  4. "market closed" message       — last resort (Claude still writes a useful post)
 """
 
 import feedparser
 import requests
 import json
+import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 from backend.config import GLOBES_RSS_URL, THEMARKER_RSS_URL
+
+log = logging.getLogger(__name__)
+_CACHE_FILE = Path(__file__).parent.parent / "market_cache.json"
+
+try:
+    import yfinance as yf
+    _HAS_YFINANCE = True
+except ImportError:
+    _HAS_YFINANCE = False
 
 TICKERS = {
     "S&P 500":   "^GSPC",
@@ -35,7 +48,26 @@ _HEADERS = {
 
 _yf_session = requests.Session()
 _yf_session.headers.update(_HEADERS)
-_crumb: str | None = None
+_crumb = None  # type: Optional[str]
+
+
+# ── Source 0: yfinance library ───────────────────────────────
+
+def _yfinance_ticker(symbol: str) -> dict:
+    """Use yfinance package — handles cookies/crumb internally."""
+    ticker = yf.Ticker(symbol)
+    hist = ticker.history(period="5d", auto_adjust=True)
+    if hist.empty or len(hist) < 2:
+        raise ValueError("Not enough data from yfinance")
+    last_close = float(hist["Close"].iloc[-1])
+    prev_close = float(hist["Close"].iloc[-2])
+    change = last_close - prev_close
+    return {
+        "close":      round(last_close, 2),
+        "change":     round(change, 2),
+        "change_pct": round((change / prev_close) * 100, 2),
+        "date":       hist.index[-1].strftime("%Y-%m-%d"),
+    }
 
 
 # ── Source 1: Yahoo Finance ───────────────────────────────────
@@ -72,6 +104,29 @@ def _yahoo_ticker(symbol: str) -> dict:
         "change_pct": round((change / prev_c) * 100, 2),
         "date":       datetime.utcfromtimestamp(last_ts).strftime("%Y-%m-%d"),
     }
+
+
+# ── Cache helpers ─────────────────────────────────────────────
+
+def _save_cache(data: dict):
+    """Save successful market data to local cache file."""
+    try:
+        good = {k: v for k, v in data.items() if "error" not in v}
+        if good:
+            _CACHE_FILE.write_text(json.dumps({"fetched": datetime.now().strftime("%Y-%m-%d"), "data": good}))
+    except Exception:
+        pass
+
+def _load_cache() -> dict:
+    """Load last cached market data; returns {} if none."""
+    try:
+        if _CACHE_FILE.exists():
+            saved = json.loads(_CACHE_FILE.read_text())
+            fetched = saved.get("fetched", "")
+            return {k: {**v, "_cache_date": fetched} for k, v in saved.get("data", {}).items()}
+    except Exception:
+        pass
+    return {}
 
 
 # ── Source 2: CNBC ────────────────────────────────────────────
@@ -115,17 +170,24 @@ def fetch_market_data() -> dict:
 
     result = {}
 
-    # Try Yahoo Finance first
-    yahoo_ok = True
     for name, ticker in TICKERS.items():
+        # Try 1: yfinance
+        if _HAS_YFINANCE:
+            try:
+                result[name] = _yfinance_ticker(ticker)
+                continue
+            except Exception:
+                pass
+
+        # Try 2: Yahoo Finance direct (crumb+cookie)
         try:
             result[name] = _yahoo_ticker(ticker)
+            continue
         except Exception as e:
             result[name] = {"error": str(e)}
-            yahoo_ok = False
 
-    # If Yahoo failed, try CNBC for US indices
-    if not yahoo_ok:
+    # Try 3: CNBC for any still-failed US indices
+    if any("error" in v for v in result.values()):
         try:
             cnbc = _cnbc_all()
             for name, data in cnbc.items():
@@ -133,6 +195,17 @@ def fetch_market_data() -> dict:
                     result[name] = data
         except Exception:
             pass
+
+    # Save successful data to cache
+    _save_cache(result)
+
+    # Try 4: Last cached data for anything still failing
+    if any("error" in v for v in result.values()):
+        cached = _load_cache()
+        for name in list(result.keys()):
+            if "error" in result.get(name, {}) and name in cached:
+                result[name] = cached[name]
+                log.warning("Using cached market data for %s from %s", name, cached[name].get("_cache_date"))
 
     return result
 
@@ -162,7 +235,12 @@ def format_market_for_prompt(data: dict) -> str:
     good = {k: v for k, v in data.items() if "error" not in v}
     if not good:
         return "נתוני שוק: לא זמינים כרגע (ייתכן שהבורסה סגורה או שיש בעיית חיבור)"
-    lines = ["נתוני שוק (סגירה אחרונה):"]
+
+    # Check if any are from cache
+    cached_dates = {v.get("_cache_date") for v in good.values() if v.get("_cache_date")}
+    cache_note = f" [נתוני גיבוי מ-{min(cached_dates)}]" if cached_dates else ""
+
+    lines = [f"נתוני שוק (סגירה אחרונה){cache_note}:"]
     for name, d in good.items():
         arrow = "📈" if d["change_pct"] >= 0 else "📉"
         sign  = "+" if d["change_pct"] >= 0 else ""
