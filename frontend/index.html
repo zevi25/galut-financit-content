@@ -22,11 +22,13 @@
 
   <!-- Tab navigation -->
   <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="whatsapp" onclick="switchTab('whatsapp')">📊 לוח בקרה</button>
-    <button class="tab-btn" data-tab="video" onclick="switchTab('video')">🎬 סטודיו וידאו</button>
+    <button class="tab-btn active" data-tab="whatsapp"   onclick="switchTab('whatsapp')">💬 וואטסאפ</button>
+    <button class="tab-btn"        data-tab="facebook"   onclick="switchTab('facebook')">📘 פייסבוק</button>
+    <button class="tab-btn"        data-tab="instagram"  onclick="switchTab('instagram')">📸 אינסטגרם</button>
+    <button class="tab-btn"        data-tab="video"      onclick="switchTab('video')">🎬 סטודיו וידאו</button>
   </nav>
 
-  <!-- WhatsApp tab -->
+  <!-- ══════════════ WHATSAPP TAB ══════════════ -->
   <main class="main" id="tab-whatsapp">
     <div class="date-bar">
       <button class="btn btn-ghost" onclick="changeDate(-1)">◀ אתמול</button>
@@ -34,12 +36,13 @@
       <button class="btn btn-ghost" onclick="changeDate(1)">מחר ▶</button>
     </div>
 
+    <!-- 5 content cards rendered by JS -->
     <div id="content-area" class="cards-grid">
       <div class="empty-state"><p>⏳ טוען...</p></div>
     </div>
 
     <div id="final-panel" class="final-panel hidden">
-      <h2>📋 התוכן המלא – מוכן לשליחה</h2>
+      <h2>📋 תוכן הוואטסאפ המלא – מוכן לשליחה</h2>
       <div id="final-text" class="final-text"></div>
       <button class="btn btn-success btn-large" onclick="copyAll()">📋 העתק הכל לוואטסאפ</button>
       <span id="copy-confirm" class="copy-confirm hidden">✅ הועתק!</span>
@@ -51,14 +54,38 @@
     </section>
   </main>
 
-  <!-- Video Studio tab -->
+  <!-- ══════════════ FACEBOOK TAB ══════════════ -->
+  <main class="main hidden" id="tab-facebook">
+    <div class="date-bar">
+      <button class="btn btn-ghost" onclick="changeDate(-1)">◀ אתמול</button>
+      <span class="date-label" id="fb-date-display"></span>
+      <button class="btn btn-ghost" onclick="changeDate(1)">מחר ▶</button>
+    </div>
+
+    <div id="fb-content-area">
+      <div class="empty-state"><p>⏳ טוען...</p></div>
+    </div>
+  </main>
+
+  <!-- ══════════════ INSTAGRAM TAB ══════════════ -->
+  <main class="main hidden" id="tab-instagram">
+    <div class="date-bar">
+      <button class="btn btn-ghost" onclick="changeDate(-1)">◀ אתמול</button>
+      <span class="date-label" id="ig-date-display"></span>
+      <button class="btn btn-ghost" onclick="changeDate(1)">מחר ▶</button>
+    </div>
+
+    <div id="ig-content-area">
+      <div class="empty-state"><p>⏳ טוען...</p></div>
+    </div>
+  </main>
+
+  <!-- ══════════════ VIDEO STUDIO TAB ══════════════ -->
   <main class="main hidden" id="tab-video">
     <div class="studio-header">
       <h2>🎬 סטודיו וידאו – פרשת השבוע</h2>
       <p class="studio-subtitle">הדבק את המלל של הסרטון וקבל תמונות קולנועיות מוכנות לאנימציה</p>
     </div>
-
-    <!-- Input section -->
     <div class="card studio-input-card">
       <div class="card-header">
         <span class="card-title">📝 מלל הסרטון</span>
@@ -74,23 +101,14 @@
         </div>
       </div>
       <div class="card-body">
-        <textarea
-          id="video-script"
-          class="content-editor script-editor"
-          placeholder="הדבק כאן את המלל של הסרטון...
-לדוגמה: יום אחרי יום אנחנו רואים את השוק עולה ויורד. כמו בני ישראל במדבר שנדדו ארבעים שנה..."></textarea>
+        <textarea id="video-script" class="content-editor script-editor"
+          placeholder="הדבק כאן את המלל של הסרטון..."></textarea>
         <div class="studio-buttons">
-          <button class="btn btn-ghost" onclick="generatePromptsOnly()">
-            📝 תצוגת פרומפטים בלבד
-          </button>
-          <button class="btn btn-primary-dark" onclick="startVideoGeneration()">
-            🎨 צור תמונות מלאות
-          </button>
+          <button class="btn btn-ghost" onclick="generatePromptsOnly()">📝 תצוגת פרומפטים בלבד</button>
+          <button class="btn btn-primary-dark" onclick="startVideoGeneration()">🎨 צור תמונות מלאות</button>
         </div>
       </div>
     </div>
-
-    <!-- Progress bar (hidden until job starts) -->
     <div id="studio-progress" class="studio-progress hidden">
       <div class="progress-header">
         <span id="progress-label">מכין פרומפטים...</span>
@@ -100,11 +118,7 @@
         <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%"></div>
       </div>
     </div>
-
-    <!-- Error message -->
     <div id="studio-error" class="studio-error hidden"></div>
-
-    <!-- Prompts preview (shown after "prompts only" action) -->
     <div id="prompts-panel" class="hidden">
       <div class="prompts-panel-header">
         <h3>📋 פרומפטים לתמונות</h3>
@@ -112,20 +126,17 @@
       </div>
       <div id="prompts-list" class="prompts-list"></div>
     </div>
-
-    <!-- Gallery -->
     <div id="gallery-panel" class="hidden">
       <div class="gallery-header">
         <h3>🖼️ תמונות מוכנות</h3>
-        <button id="btn-download-zip" class="btn btn-success" onclick="downloadZip()">
-          ⬇️ הורד ZIP
-        </button>
+        <button id="btn-download-zip" class="btn btn-success" onclick="downloadZip()">⬇️ הורד ZIP</button>
       </div>
       <div id="gallery-grid" class="gallery-grid"></div>
     </div>
   </main>
 
   <script src="app.js"></script>
+  <script src="social.js"></script>
   <script src="studio.js"></script>
 </body>
 </html>

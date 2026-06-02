@@ -16,18 +16,14 @@ def run_daily_generation():
     try:
         market_data = data_fetcher.fetch_market_data()
         news = data_fetcher.fetch_globes_news()
-        market_summary, investment_tip, news_analysis = content_generator.generate_all(
-            market_data, news
-        )
+        all_content = content_generator.generate_all(market_data, news)
         database.save_draft(
             date=today,
-            market_summary=market_summary,
-            investment_tip=investment_tip,
-            news_analysis=news_analysis,
-            raw_market_data=market_data,
-            raw_news=news,
+            raw_market_data=__import__("json").dumps(market_data, ensure_ascii=False),
+            raw_news=__import__("json").dumps(news, ensure_ascii=False),
+            **all_content,
         )
-        log.info(f"Content generation complete for {today}")
+        log.info(f"Content generation complete for {today} — {len(all_content)} sections")
         return True
     except Exception as e:
         log.error(f"Content generation failed: {e}", exc_info=True)

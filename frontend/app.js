@@ -1,23 +1,45 @@
 const API = '/api';
-const SECTIONS = [
-  { key: 'market_summary',  label: '📊 סיכום שוק יומי' },
-  { key: 'investment_tip',  label: '💡 טיפ השקעות' },
-  { key: 'news_analysis',   label: '📰 חדשות עם פרשנות' },
+
+const WA_SECTIONS = [
+  { key: 'market_summary',      label: '📊 סיכום שוק יומי' },
+  { key: 'investment_tip',      label: '💡 טיפ השקעות' },
+  { key: 'news_analysis',       label: '📰 חדשות עם פרשנות' },
+  { key: 'stock_of_week',       label: '📈 מניה השבוע' },
+  { key: 'investor_psychology', label: '🧠 פסיכולוגיה של משקיע' },
+  { key: 'weekly_events',       label: '🗓️ אירועי שבוע' },
 ];
 
 let currentDate = todayStr();
 let currentContent = null;
+let currentTab = 'whatsapp';
 
 function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
-
 function hebrewDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// ── Date navigation ──────────────────────────────────────────
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('main.main').forEach(m => m.classList.add('hidden'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+  const btnGenerate = document.getElementById('btn-generate');
+  if (btnGenerate) btnGenerate.style.display = (tab === 'video') ? 'none' : '';
+  refreshCurrentTab();
+}
+
+function refreshCurrentTab() {
+  if (currentTab === 'whatsapp') renderWhatsapp();
+  if (currentTab === 'facebook') window.renderFacebook && renderFacebook();
+  if (currentTab === 'instagram') window.renderInstagram && renderInstagram();
+}
+
+// ── Date navigation ───────────────────────────────────────────
 function changeDate(delta) {
   const d = new Date(currentDate + 'T12:00:00');
   d.setDate(d.getDate() + delta);
@@ -25,51 +47,44 @@ function changeDate(delta) {
   loadContent();
 }
 
-// ── Load content ─────────────────────────────────────────────
+// ── Load content ──────────────────────────────────────────────
 async function loadContent() {
-  document.getElementById('date-display').textContent = hebrewDate(currentDate);
-  document.getElementById('content-area').innerHTML =
-    '<div class="empty-state"><p>⏳ טוען...</p></div>';
-  document.getElementById('final-panel').classList.add('hidden');
+  // Update all date displays
+  ['date-display', 'fb-date-display', 'ig-date-display'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = hebrewDate(currentDate);
+  });
 
   try {
     const res = await fetch(`${API}/content/${currentDate}`);
-    if (!res.ok) {
-      currentContent = null;
-      renderEmpty();
-      return;
-    }
-    currentContent = await res.json();
-    renderCards(currentContent);
-    loadHistory();
-  } catch {
-    renderEmpty('שגיאת חיבור לשרת');
-  }
+    if (!res.ok) { currentContent = null; }
+    else { currentContent = await res.json(); }
+  } catch { currentContent = null; }
+
+  refreshCurrentTab();
+  loadHistory();
 }
 
-function renderEmpty(msg) {
-  document.getElementById('content-area').innerHTML =
-    `<div class="empty-state"><p>📭 ${msg || 'אין תוכן לתאריך זה'}</p><p style="margin-top:8px;font-size:0.85rem;color:#9ca3af">לחץ "צור תוכן עכשיו" כדי להתחיל</p></div>`;
-}
-
-// ── Render cards ─────────────────────────────────────────────
-function renderCards(content) {
+// ══════════════════════════════════════════════════════════════
+// WHATSAPP
+// ══════════════════════════════════════════════════════════════
+function renderWhatsapp() {
   const area = document.getElementById('content-area');
+  document.getElementById('final-panel').classList.add('hidden');
+  if (!currentContent) { area.innerHTML = '<div class="empty-state"><p>📭 אין תוכן לתאריך זה</p><p style="margin-top:8px;font-size:.85rem;color:#9ca3af">לחץ "צור תוכן עכשיו" כדי להתחיל</p></div>'; return; }
+
   area.innerHTML = '';
-
-  SECTIONS.forEach(({ key, label }) => {
-    const text = content[key] || '';
-    const status = content[`${key}_status`] || 'draft';
-    const approved = status === 'approved';
-
+  WA_SECTIONS.forEach(({ key, label }) => {
+    const text = currentContent[key] || '';
+    const approved = currentContent[`${key}_status`] === 'approved';
     const card = document.createElement('div');
     card.className = `card${approved ? ' approved' : ''}`;
     card.id = `card-${key}`;
     card.innerHTML = `
       <div class="card-header">
-        <span class="card-title">${label} ${approved ? '✅' : ''}</span>
+        <span class="card-title">${label}${approved ? ' ✅' : ''}</span>
         <div class="card-actions">
-          <button class="btn btn-regen" onclick="regenerateSection('${key}')" ${approved ? 'disabled' : ''}>🔄 צור מחדש</button>
+          <button class="btn btn-regen" onclick="regenSection('${key}')" ${approved ? 'disabled' : ''}>🔄 חדש</button>
           <button class="btn btn-ghost" onclick="toggleEdit('${key}')">✏️ ערוך</button>
           <button class="btn btn-approve${approved ? ' approved' : ''}" id="approve-btn-${key}"
             onclick="${approved ? '' : `approveSection('${key}')`}">${approved ? '✅ אושר' : '✅ אשר'}</button>
@@ -87,131 +102,68 @@ function renderCards(content) {
       </div>`;
     area.appendChild(card);
   });
-
   checkAllApproved();
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// ── Edit ─────────────────────────────────────────────────────
 function toggleEdit(key) {
   const wrap = document.getElementById(`editor-wrap-${key}`);
   const display = document.getElementById(`display-${key}`);
-  if (wrap.classList.contains('hidden')) {
-    wrap.classList.remove('hidden');
-    display.classList.add('hidden');
-  } else {
-    cancelEdit(key);
-  }
+  if (wrap.classList.contains('hidden')) { wrap.classList.remove('hidden'); display.classList.add('hidden'); }
+  else cancelEdit(key);
 }
-
 function cancelEdit(key) {
   document.getElementById(`editor-wrap-${key}`).classList.add('hidden');
   document.getElementById(`display-${key}`).classList.remove('hidden');
 }
-
 async function saveEdit(key) {
   const text = document.getElementById(`editor-${key}`).value;
   await fetch(`${API}/content/${currentDate}/section/${key}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
   });
   currentContent[key] = text;
   document.getElementById(`display-${key}`).textContent = text;
   cancelEdit(key);
 }
 
-// ── Approve ───────────────────────────────────────────────────
 async function approveSection(key) {
   await fetch(`${API}/content/${currentDate}/approve/${key}`, { method: 'POST' });
   currentContent[`${key}_status`] = 'approved';
   const card = document.getElementById(`card-${key}`);
   card.classList.add('approved');
   const btn = document.getElementById(`approve-btn-${key}`);
-  btn.textContent = '✅ אושר';
-  btn.classList.add('approved');
-  btn.onclick = null;
-
+  btn.textContent = '✅ אושר'; btn.classList.add('approved'); btn.onclick = null;
   const regenBtn = card.querySelector('.btn-regen');
   if (regenBtn) regenBtn.disabled = true;
-
   const title = card.querySelector('.card-title');
   if (!title.textContent.includes('✅')) title.textContent += ' ✅';
-
   checkAllApproved();
+  // Also notify social.js if needed
+  if (window.onSectionApproved) window.onSectionApproved(key);
 }
 
 function checkAllApproved() {
   if (!currentContent) return;
-  const allApproved = SECTIONS.every(
-    ({ key }) => currentContent[`${key}_status`] === 'approved'
-  );
+  const allApproved = WA_SECTIONS.every(({ key }) => currentContent[`${key}_status`] === 'approved');
   if (allApproved) showFinalPanel();
 }
 
 function showFinalPanel() {
-  const parts = SECTIONS.map(({ key, label }) =>
-    `${label}\n${'─'.repeat(30)}\n${currentContent[key]}`
-  );
+  const parts = WA_SECTIONS.map(({ key, label }) => `${label}\n${'─'.repeat(30)}\n${currentContent[key]}`);
   document.getElementById('final-text').textContent = parts.join('\n\n');
   document.getElementById('final-panel').classList.remove('hidden');
   document.getElementById('final-panel').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── Copy all ──────────────────────────────────────────────────
 function copyAll() {
   const text = document.getElementById('final-text').textContent;
   navigator.clipboard.writeText(text).then(() => {
-    const confirm = document.getElementById('copy-confirm');
-    confirm.classList.remove('hidden');
-    setTimeout(() => confirm.classList.add('hidden'), 2500);
+    const c = document.getElementById('copy-confirm');
+    c.classList.remove('hidden');
+    setTimeout(() => c.classList.add('hidden'), 2500);
   });
 }
 
-// ── Generate ──────────────────────────────────────────────────
-async function generateContent() {
-  const btn = document.getElementById('btn-generate');
-  const badge = document.getElementById('status-badge');
-  btn.disabled = true;
-  btn.innerHTML = '✨ מייצר תוכן... <span class="spinner"></span>';
-  badge.className = 'badge badge-loading';
-  badge.textContent = 'מייצר...';
-
-  try {
-    const res = await fetch(`${API}/generate`, { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) {
-      currentDate = todayStr();
-      currentContent = data.content;
-      document.getElementById('date-display').textContent = hebrewDate(currentDate);
-      renderCards(currentContent);
-      badge.className = 'badge badge-success';
-      badge.textContent = 'נוצר בהצלחה ✅';
-      loadHistory();
-    } else {
-      badge.className = 'badge badge-error';
-      badge.textContent = 'שגיאה ❌';
-      alert('שגיאה: ' + (data.error || 'לא ידוע'));
-    }
-  } catch {
-    badge.className = 'badge badge-error';
-    badge.textContent = 'שגיאת חיבור';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '✨ צור תוכן עכשיו';
-    setTimeout(() => {
-      badge.className = 'badge badge-idle';
-      badge.textContent = 'מוכן';
-    }, 4000);
-  }
-}
-
-// ── Regenerate section ────────────────────────────────────────
-async function regenerateSection(key) {
+async function regenSection(key) {
   const display = document.getElementById(`display-${key}`);
   display.textContent = '⏳ מייצר מחדש...';
   try {
@@ -219,12 +171,45 @@ async function regenerateSection(key) {
     const data = await res.json();
     if (data.ok && data.content) {
       currentContent = data.content;
-      display.textContent = data.content[key];
+      display.textContent = data.content[key] || '';
       const editor = document.getElementById(`editor-${key}`);
-      if (editor) editor.value = data.content[key];
+      if (editor) editor.value = data.content[key] || '';
+      if (window.renderFacebook) renderFacebook();
+      if (window.renderInstagram) renderInstagram();
+    }
+  } catch { display.textContent = currentContent[key] || ''; }
+}
+
+// ── Generate ──────────────────────────────────────────────────
+async function generateContent() {
+  const btn = document.getElementById('btn-generate');
+  const badge = document.getElementById('status-badge');
+  btn.disabled = true;
+  btn.innerHTML = '✨ מייצר... <span class="spinner"></span>';
+  badge.className = 'badge badge-loading'; badge.textContent = 'מייצר...';
+
+  try {
+    const res = await fetch(`${API}/generate`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      currentDate = todayStr();
+      currentContent = data.content;
+      ['date-display','fb-date-display','ig-date-display'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = hebrewDate(currentDate);
+      });
+      refreshCurrentTab();
+      badge.className = 'badge badge-success'; badge.textContent = 'נוצר ✅';
+      loadHistory();
+    } else {
+      badge.className = 'badge badge-error'; badge.textContent = 'שגיאה ❌';
+      alert('שגיאה: ' + (data.error || 'לא ידוע'));
     }
   } catch {
-    display.textContent = currentContent[key];
+    badge.className = 'badge badge-error'; badge.textContent = 'שגיאת חיבור';
+  } finally {
+    btn.disabled = false; btn.textContent = '✨ צור תוכן עכשיו';
+    setTimeout(() => { badge.className = 'badge badge-idle'; badge.textContent = 'מוכן'; }, 4000);
   }
 }
 
@@ -236,12 +221,11 @@ async function loadHistory() {
     const list = document.getElementById('history-list');
     list.innerHTML = '';
     items.forEach(item => {
-      const allApproved = SECTIONS.every(
-        ({ key }) => item[`${key}_status`] === 'approved'
-      );
-      const anyApproved = SECTIONS.some(
-        ({ key }) => item[`${key}_status`] === 'approved'
-      );
+      const statuses = Object.values(item).filter(v => v === 'approved' || v === 'draft');
+      const approved = statuses.filter(v => v === 'approved').length;
+      const total = statuses.length;
+      const allApproved = approved === total && total > 0;
+      const anyApproved = approved > 0;
       const div = document.createElement('div');
       div.className = `history-item${allApproved ? ' all-approved' : anyApproved ? ' partial' : ''}`;
       div.textContent = item.date;
@@ -251,8 +235,15 @@ async function loadHistory() {
   } catch {}
 }
 
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 // ── Init ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('date-display').textContent = hebrewDate(currentDate);
+  ['date-display','fb-date-display','ig-date-display'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = hebrewDate(currentDate);
+  });
   loadContent();
 });
