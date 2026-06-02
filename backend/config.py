@@ -1,8 +1,23 @@
 import os
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+
+# ── Israel time helper ────────────────────────────────────────
+_TZ_ISRAEL = timezone(timedelta(hours=3))   # UTC+3 (IDT, summer)
+# Note: Israel is UTC+2 in winter (IST) and UTC+3 in summer (IDT).
+# Using UTC+3 is slightly off in winter but avoids a pytz dependency.
+# APScheduler already handles DST correctly via "Asia/Jerusalem".
+
+def israel_now() -> datetime:
+    """Current datetime in Israel timezone (no external dependency)."""
+    return datetime.now(tz=_TZ_ISRAEL)
+
+def today_israel() -> str:
+    """Today's date string (YYYY-MM-DD) in Israel timezone."""
+    return israel_now().strftime("%Y-%m-%d")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 WAVESPEED_API_KEY = os.getenv("WAVESPEED_API_KEY", "")

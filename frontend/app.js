@@ -14,7 +14,8 @@ let currentContent = null;
 let currentTab = 'whatsapp';
 
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  // Always use Israel timezone (UTC+2/+3) so date flips at Israeli midnight
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 }
 function hebrewDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');

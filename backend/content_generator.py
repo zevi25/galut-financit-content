@@ -1,6 +1,6 @@
 import anthropic
 import json
-from datetime import datetime
+from backend.config import israel_now as _now_fn
 from backend.config import ANTHROPIC_API_KEY, CLAUDE_MODEL, WEEKLY_TOPICS
 from backend.data_fetcher import format_market_for_prompt, format_news_for_prompt
 
@@ -22,7 +22,7 @@ WHATSAPP_RULE = "כל פוסט לוואטסאפ מקסימום 200-250 מילי�
 # ── helpers ────────────────────────────────────────────────────
 
 def _week_topic() -> str:
-    week_num = datetime.now().isocalendar()[1]
+    week_num = _now_fn().isocalendar()[1]
     return WEEKLY_TOPICS[week_num % len(WEEKLY_TOPICS)]
 
 
@@ -41,7 +41,7 @@ def _call(prompt: str, max_tokens: int = 700) -> str:
 # ══════════════════════════════════════════════════════════════
 
 def generate_market_summary(market_data: dict) -> str:
-    today = datetime.now().strftime("%A, %d/%m/%Y")
+    today = _now_fn().strftime("%A, %d/%m/%Y")
     market_text = format_market_for_prompt(market_data)
     return _call(f"""כתוב פוסט סיכום שוק יומי לקבוצת WhatsApp.
 תאריך: {today}
@@ -82,11 +82,11 @@ def generate_news_analysis(news: list) -> str:
 
 
 def generate_stock_of_week(market_data: dict) -> str:
-    today = datetime.now().strftime("%d/%m/%Y")
+    today = _now_fn().strftime("%d/%m/%Y")
     # Pick a well-known stock to spotlight based on week number
     stocks = ["Apple (AAPL)", "Microsoft (MSFT)", "NVIDIA (NVDA)", "Amazon (AMZN)",
               "Tesla (TSLA)", "Alphabet (GOOGL)", "Meta (META)", "Berkshire Hathaway (BRK.B)"]
-    week_num = datetime.now().isocalendar()[1]
+    week_num = _now_fn().isocalendar()[1]
     stock = stocks[week_num % len(stocks)]
     return _call(f"""כתוב פוסט "מניה השבוע" לקבוצת WhatsApp.
 תאריך: {today}
@@ -111,7 +111,7 @@ def generate_investor_psychology() -> str:
         "סבלנות לעומת חמדנות – ההבדל בין משקיע לספקולנט",
         "מהי 'זמן בשוק' ולמה עדיף על 'תזמון שוק'",
     ]
-    week_num = datetime.now().isocalendar()[1]
+    week_num = _now_fn().isocalendar()[1]
     topic = topics[week_num % len(topics)]
     return _call(f"""כתוב פוסט "פסיכולוגיה של משקיע" לקבוצת WhatsApp.
 נושא: {topic}
@@ -125,7 +125,7 @@ def generate_investor_psychology() -> str:
 
 
 def generate_weekly_events() -> str:
-    today = datetime.now()
+    today = _now_fn()
     week_str = today.strftime("%d/%m/%Y")
     return _call(f"""כתוב פוסט "מה צפוי השבוע בשוק ההון" לקבוצת WhatsApp.
 תאריך היום: {week_str}
@@ -147,7 +147,7 @@ def generate_weekly_events() -> str:
 def generate_facebook_post(market_data: dict, news: list) -> str:
     market_text = format_market_for_prompt(market_data)
     news_text = format_news_for_prompt(news[:3])
-    today = datetime.now().strftime("%A, %d/%m/%Y")
+    today = _now_fn().strftime("%A, %d/%m/%Y")
     return _call(f"""כתוב פוסט פייסבוק ארוך ומעמיק לדף "לצאת מהגלות הפיננסית".
 תאריך: {today}
 {market_text}
@@ -173,7 +173,7 @@ def generate_instagram_carousel(market_data: dict) -> str:
     """Returns JSON string with carousel slides."""
     topic = _week_topic()
     market_text = format_market_for_prompt(market_data)
-    today = datetime.now().strftime("%d/%m/%Y")
+    today = _now_fn().strftime("%d/%m/%Y")
 
     raw = _call(f"""צור קרוסלה לאינסטגרם בנושא השקעות לקהל חרדי.
 נושא השבוע: {topic}

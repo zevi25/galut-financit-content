@@ -1,8 +1,7 @@
 import logging
-from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from backend.config import SCHEDULE_HOUR, SCHEDULE_MINUTE
+from backend.config import SCHEDULE_HOUR, SCHEDULE_MINUTE, today_israel
 from backend import database, data_fetcher, content_generator
 
 log = logging.getLogger(__name__)
@@ -12,7 +11,7 @@ _scheduler = BackgroundScheduler(timezone="Asia/Jerusalem")
 
 def run_daily_generation():
     """Full generation — creates all 9 sections. Used on first run of the day."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_israel()
     log.info(f"Starting FULL content generation for {today}")
     try:
         market_data = data_fetcher.fetch_market_data()
@@ -33,7 +32,7 @@ def run_daily_generation():
 
 def run_market_refresh():
     """Light refresh — only updates market_summary (market already exists for today)."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_israel()
     log.info(f"Starting MARKET REFRESH for {today}")
     try:
         market_data = data_fetcher.fetch_market_data()

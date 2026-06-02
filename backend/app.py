@@ -3,13 +3,13 @@ import logging
 import threading
 import uuid
 import zipfile
-from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 
 from backend import database, scheduler, data_fetcher, content_generator
+from backend.config import today_israel
 from backend.image_api import NanoBananaClient
 from backend.scheduler import run_daily_generation, run_market_refresh
 from backend.video_studio import generate_scene_prompts
@@ -42,7 +42,7 @@ def get_content(date):
 
 @app.route("/api/content/today", methods=["GET"])
 def get_today():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_israel()
     content = database.get_content(today)
     if not content:
         return jsonify({"error": "אין תוכן להיום עדיין", "date": today}), 404
@@ -72,7 +72,7 @@ def approve_section(date, section):
 
 @app.route("/api/generate", methods=["POST"])
 def generate_now():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_israel()
     existing = database.get_content(today)
     req_data = request.get_json(silent=True) or {}
     force_all = req_data.get("force_all", False)
@@ -97,7 +97,7 @@ def generate_section_now(section):
     """Regenerate a single section without touching anything else."""
     import json as _json
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_israel()
     try:
         market_data = data_fetcher.fetch_market_data()
         news = data_fetcher.fetch_globes_news()

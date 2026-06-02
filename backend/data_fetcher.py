@@ -14,7 +14,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from backend.config import GLOBES_RSS_URL, THEMARKER_RSS_URL
+from backend.config import GLOBES_RSS_URL, THEMARKER_RSS_URL, israel_now
 
 log = logging.getLogger(__name__)
 _data_dir = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent)))
@@ -105,7 +105,7 @@ def _nasdaq_ticker(symbol: str, asset_class: str) -> dict:
         "close":      round(last_close, 2),
         "change":     round(change, 2),
         "change_pct": round(change_pct, 2),
-        "date":       datetime.now().strftime("%Y-%m-%d"),
+        "date":       israel_now().strftime("%Y-%m-%d"),
     }
 
 
@@ -170,7 +170,7 @@ def _save_cache(data: dict):
         good = {k: v for k, v in data.items() if "error" not in v}
         if good:
             _CACHE_FILE.write_text(
-                json.dumps({"fetched": datetime.now().strftime("%Y-%m-%d"), "data": good},
+                json.dumps({"fetched": israel_now().strftime("%Y-%m-%d"), "data": good},
                            ensure_ascii=False)
             )
     except Exception:
