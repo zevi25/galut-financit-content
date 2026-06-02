@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>לצאת מהגלות הפיננסית – לוח בקרה</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <h1>📊 לצאת מהגלות הפיננסית</h1>
+      <p class="subtitle">לוח בקרה תוכן יומי</p>
+    </div>
+    <div class="header-actions">
+      <span id="status-badge" class="badge badge-idle">מוכן</span>
+      <button id="btn-generate" class="btn btn-primary" onclick="generateContent()">
+        ✨ צור תוכן עכשיו
+      </button>
+    </div>
+  </header>
+
+  <!-- Tab navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="whatsapp" onclick="switchTab('whatsapp')">📊 לוח בקרה</button>
+    <button class="tab-btn" data-tab="video" onclick="switchTab('video')">🎬 סטודיו וידאו</button>
+  </nav>
+
+  <!-- WhatsApp tab -->
+  <main class="main" id="tab-whatsapp">
+    <div class="date-bar">
+      <button class="btn btn-ghost" onclick="changeDate(-1)">◀ אתמול</button>
+      <span id="date-display" class="date-label"></span>
+      <button class="btn btn-ghost" onclick="changeDate(1)">מחר ▶</button>
+    </div>
+
+    <div id="content-area" class="cards-grid">
+      <div class="empty-state"><p>⏳ טוען...</p></div>
+    </div>
+
+    <div id="final-panel" class="final-panel hidden">
+      <h2>📋 התוכן המלא – מוכן לשליחה</h2>
+      <div id="final-text" class="final-text"></div>
+      <button class="btn btn-success btn-large" onclick="copyAll()">📋 העתק הכל לוואטסאפ</button>
+      <span id="copy-confirm" class="copy-confirm hidden">✅ הועתק!</span>
+    </div>
+
+    <section class="history-section">
+      <h3>📅 היסטוריה</h3>
+      <div id="history-list" class="history-list"></div>
+    </section>
+  </main>
+
+  <!-- Video Studio tab -->
+  <main class="main hidden" id="tab-video">
+    <div class="studio-header">
+      <h2>🎬 סטודיו וידאו – פרשת השבוע</h2>
+      <p class="studio-subtitle">הדבק את המלל של הסרטון וקבל תמונות קולנועיות מוכנות לאנימציה</p>
+    </div>
+
+    <!-- Input section -->
+    <div class="card studio-input-card">
+      <div class="card-header">
+        <span class="card-title">📝 מלל הסרטון</span>
+        <div class="studio-controls">
+          <label class="scenes-label">מספר פריימים:</label>
+          <select id="num-scenes" class="scenes-select">
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="15" selected>15</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea
+          id="video-script"
+          class="content-editor script-editor"
+          placeholder="הדבק כאן את המלל של הסרטון...
+לדוגמה: יום אחרי יום אנחנו רואים את השוק עולה ויורד. כמו בני ישראל במדבר שנדדו ארבעים שנה..."></textarea>
+        <div class="studio-buttons">
+          <button class="btn btn-ghost" onclick="generatePromptsOnly()">
+            📝 תצוגת פרומפטים בלבד
+          </button>
+          <button class="btn btn-primary-dark" onclick="startVideoGeneration()">
+            🎨 צור תמונות מלאות
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar (hidden until job starts) -->
+    <div id="studio-progress" class="studio-progress hidden">
+      <div class="progress-header">
+        <span id="progress-label">מכין פרומפטים...</span>
+        <span id="progress-count"></span>
+      </div>
+      <div class="progress-bar-track">
+        <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Error message -->
+    <div id="studio-error" class="studio-error hidden"></div>
+
+    <!-- Prompts preview (shown after "prompts only" action) -->
+    <div id="prompts-panel" class="hidden">
+      <div class="prompts-panel-header">
+        <h3>📋 פרומפטים לתמונות</h3>
+        <button class="btn btn-ghost btn-sm" onclick="copyAllPrompts()">📋 העתק הכל</button>
+      </div>
+      <div id="prompts-list" class="prompts-list"></div>
+    </div>
+
+    <!-- Gallery -->
+    <div id="gallery-panel" class="hidden">
+      <div class="gallery-header">
+        <h3>🖼️ תמונות מוכנות</h3>
+        <button id="btn-download-zip" class="btn btn-success" onclick="downloadZip()">
+          ⬇️ הורד ZIP
+        </button>
+      </div>
+      <div id="gallery-grid" class="gallery-grid"></div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script src="studio.js"></script>
+</body>
+</html>
