@@ -3,17 +3,6 @@ let _currentJobId = null;
 let _pollInterval = null;
 let _currentScenes = [];
 
-// ── Tab switching ─────────────────────────────────────────────
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.main').forEach(m => m.classList.add('hidden'));
-  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-  document.getElementById(`tab-${tab}`).classList.remove('hidden');
-  // Hide WhatsApp generate button when in video studio
-  const btnGenerate = document.getElementById('btn-generate');
-  if (btnGenerate) btnGenerate.style.display = tab === 'whatsapp' ? '' : 'none';
-}
-
 // ── Prompts only ──────────────────────────────────────────────
 async function generatePromptsOnly() {
   const script = document.getElementById('video-script').value.trim();
