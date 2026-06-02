@@ -65,24 +65,39 @@ _crumb: Optional[str] = None
 
 # ── Source 1: Nasdaq public API ───────────────────────────────
 
+def _clean_num(s: str) -> str:
+    """Strip $, commas, +, spaces from a numeric string."""
+    return s.replace("$", "").replace(",", "").replace("+", "").strip()
+
+
 def _nasdaq_ticker(symbol: str, asset_class: str) -> dict:
     """Free Nasdaq API — works without any auth or API key."""
     url = f"https://api.nasdaq.com/api/quote/{symbol}/info?assetclass={asset_class}"
     r = requests.get(url, headers=_HEADERS, timeout=12)
     r.raise_for_status()
     data = r.json().get("data", {})
-    primary = data.get("primaryData", {})
-    summary = data.get("summaryData", {})
+    primary  = data.get("primaryData", {})
+    summary  = data.get("summaryData", {})
 
-    # Price
-    raw_price = primary.get("lastSalePrice", "").replace("$", "").replace(",", "")
+    # Price — try lastSalePrice, fall back to previousClose from summary
+    raw_price = _clean_num(primary.get("lastSalePrice", "") or "")
+    if not raw_price:
+        # summaryData["PreviousClose"] is a dict {"value": "$xxx"}
+        pc = summary.get("PreviousClose", {}) or summary.get("previousClose", {})
+        raw_price = _clean_num((pc.get("value") or "").replace("$", ""))
+    if not raw_price:
+        raise ValueError(f"No price data available for {symbol}")
+
     last_close = float(raw_price)
 
     # % change
-    raw_pct = primary.get("percentageChange", "0%").replace("%", "").replace("+", "").replace(",", "")
-    change_pct = float(raw_pct)
+    raw_pct = _clean_num(primary.get("percentageChange", "0%").replace("%", ""))
+    try:
+        change_pct = float(raw_pct) if raw_pct else 0.0
+    except ValueError:
+        change_pct = 0.0
 
-    # Previous close (for absolute change)
+    # Absolute change
     prev_close = last_close / (1 + change_pct / 100) if change_pct != -100 else last_close
     change = last_close - prev_close
 
