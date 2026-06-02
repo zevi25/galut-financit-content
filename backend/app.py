@@ -133,6 +133,14 @@ def history():
     return jsonify(database.get_history())
 
 
+@app.route("/api/debug/market", methods=["GET"])
+def debug_market():
+    """Returns raw market data — for debugging only."""
+    raw = data_fetcher.fetch_market_data()
+    formatted = data_fetcher.format_market_for_prompt(raw)
+    return jsonify({"raw": raw, "formatted": formatted})
+
+
 # ---------------------------------------------------------------------------
 # Video Studio routes
 # ---------------------------------------------------------------------------

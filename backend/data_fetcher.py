@@ -1,11 +1,12 @@
 """
 Market data fetching — multi-source with fallback:
-  1. yfinance library              — primary (handles auth internally)
-  2. Yahoo Finance (crumb+cookie)  — fallback
-  3. CNBC Markets API              — fallback 2
-  4. "market closed" message       — last resort (Claude still writes a useful post)
+  1. Nasdaq public API (SPY/QQQ/DIA ETFs + COMP index) — primary, no auth needed
+  2. yfinance library                                   — fallback
+  3. Yahoo Finance (crumb+cookie)                       — fallback 2
+  4. File cache (last successful fetch)                 — last resort
 """
 
+import os
 import feedparser
 import requests
 import json
@@ -16,7 +17,8 @@ from typing import Optional
 from backend.config import GLOBES_RSS_URL, THEMARKER_RSS_URL
 
 log = logging.getLogger(__name__)
-_CACHE_FILE = Path(__file__).parent.parent / "market_cache.json"
+_data_dir = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent)))
+_CACHE_FILE = _data_dir / "market_cache.json"
 
 try:
     import yfinance as yf
@@ -24,17 +26,21 @@ try:
 except ImportError:
     _HAS_YFINANCE = False
 
-TICKERS = {
+# ── Ticker maps ───────────────────────────────────────────────
+
+# Nasdaq API: ETF proxies for US indices (free, no auth)
+_NASDAQ_ETF = {
+    "S&P 500":    ("SPY",  "etf"),
+    'נאסד"ק':     ("COMP", "index"),
+    "דאו ג'ונס":  ("DIA",  "etf"),
+}
+
+# yfinance / Yahoo Finance tickers
+_YF_TICKERS = {
     "S&P 500":   "^GSPC",
     'נאסד"ק':    "^IXIC",
     "דאו ג'ונס": "^DJI",
     'ת"א 125':   "^TA125.TA",
-}
-
-CNBC_SYMBOLS = {
-    "S&P 500":   ".SPX",
-    'נאסד"ק':    ".NDX",
-    "דאו ג'ונס": ".DJIA",
 }
 
 _HEADERS = {
@@ -44,17 +50,53 @@ _HEADERS = {
         "Chrome/124.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "application/json, text/plain, */*",
+    "Origin": "https://www.nasdaq.com",
+    "Referer": "https://www.nasdaq.com/",
 }
 
 _yf_session = requests.Session()
-_yf_session.headers.update(_HEADERS)
-_crumb = None  # type: Optional[str]
+_yf_session.headers.update({
+    "User-Agent": _HEADERS["User-Agent"],
+    "Accept-Language": _HEADERS["Accept-Language"],
+})
+_crumb: Optional[str] = None
 
 
-# ── Source 0: yfinance library ───────────────────────────────
+# ── Source 1: Nasdaq public API ───────────────────────────────
+
+def _nasdaq_ticker(symbol: str, asset_class: str) -> dict:
+    """Free Nasdaq API — works without any auth or API key."""
+    url = f"https://api.nasdaq.com/api/quote/{symbol}/info?assetclass={asset_class}"
+    r = requests.get(url, headers=_HEADERS, timeout=12)
+    r.raise_for_status()
+    data = r.json().get("data", {})
+    primary = data.get("primaryData", {})
+    summary = data.get("summaryData", {})
+
+    # Price
+    raw_price = primary.get("lastSalePrice", "").replace("$", "").replace(",", "")
+    last_close = float(raw_price)
+
+    # % change
+    raw_pct = primary.get("percentageChange", "0%").replace("%", "").replace("+", "").replace(",", "")
+    change_pct = float(raw_pct)
+
+    # Previous close (for absolute change)
+    prev_close = last_close / (1 + change_pct / 100) if change_pct != -100 else last_close
+    change = last_close - prev_close
+
+    return {
+        "close":      round(last_close, 2),
+        "change":     round(change, 2),
+        "change_pct": round(change_pct, 2),
+        "date":       datetime.now().strftime("%Y-%m-%d"),
+    }
+
+
+# ── Source 2: yfinance library ────────────────────────────────
 
 def _yfinance_ticker(symbol: str) -> dict:
-    """Use yfinance package — handles cookies/crumb internally."""
     ticker = yf.Ticker(symbol)
     hist = ticker.history(period="5d", auto_adjust=True)
     if hist.empty or len(hist) < 2:
@@ -70,7 +112,7 @@ def _yfinance_ticker(symbol: str) -> dict:
     }
 
 
-# ── Source 1: Yahoo Finance ───────────────────────────────────
+# ── Source 3: Yahoo Finance (crumb+cookie) ────────────────────
 
 def _get_crumb() -> str:
     global _crumb
@@ -109,16 +151,18 @@ def _yahoo_ticker(symbol: str) -> dict:
 # ── Cache helpers ─────────────────────────────────────────────
 
 def _save_cache(data: dict):
-    """Save successful market data to local cache file."""
     try:
         good = {k: v for k, v in data.items() if "error" not in v}
         if good:
-            _CACHE_FILE.write_text(json.dumps({"fetched": datetime.now().strftime("%Y-%m-%d"), "data": good}))
+            _CACHE_FILE.write_text(
+                json.dumps({"fetched": datetime.now().strftime("%Y-%m-%d"), "data": good},
+                           ensure_ascii=False)
+            )
     except Exception:
         pass
 
+
 def _load_cache() -> dict:
-    """Load last cached market data; returns {} if none."""
     try:
         if _CACHE_FILE.exists():
             saved = json.loads(_CACHE_FILE.read_text())
@@ -129,83 +173,51 @@ def _load_cache() -> dict:
     return {}
 
 
-# ── Source 2: CNBC ────────────────────────────────────────────
-
-def _cnbc_all() -> dict:
-    symbols = "|".join(CNBC_SYMBOLS.values())
-    url = (
-        "https://quote.cnbc.com/quote-html-webservice/restservices/cff/quote"
-        f"?symbols={symbols}&requestMethod=itv&noform=1&partnerId=2"
-        "&fund=1&exthrs=1&output=json&events=1"
-    )
-    r = requests.get(url, headers=_HEADERS, timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    results = {}
-    quotes = data.get("FormattedQuoteResult", {}).get("FormattedQuote", [])
-    for q in quotes:
-        symbol = q.get("symbol", "")
-        for heb_name, cnbc_sym in CNBC_SYMBOLS.items():
-            if symbol == cnbc_sym:
-                try:
-                    last = float(str(q.get("last", "0")).replace(",", ""))
-                    change = float(str(q.get("change", "0")).replace(",", ""))
-                    change_pct = float(str(q.get("change_pct", "0")).replace(",", "").replace("%", ""))
-                    results[heb_name] = {
-                        "close":      round(last, 2),
-                        "change":     round(change, 2),
-                        "change_pct": round(change_pct, 2),
-                        "date":       datetime.now().strftime("%Y-%m-%d"),
-                    }
-                except Exception:
-                    pass
-    return results
-
-
 # ── Public interface ──────────────────────────────────────────
 
 def fetch_market_data() -> dict:
     global _crumb
-    _crumb = None  # fresh crumb every day
+    _crumb = None
 
     result = {}
 
-    for name, ticker in TICKERS.items():
-        # Try 1: yfinance
-        if _HAS_YFINANCE:
-            try:
-                result[name] = _yfinance_ticker(ticker)
-                continue
-            except Exception:
-                pass
-
-        # Try 2: Yahoo Finance direct (crumb+cookie)
+    # ── US Indices via Nasdaq API (primary) ──
+    for name, (sym, cls) in _NASDAQ_ETF.items():
         try:
-            result[name] = _yahoo_ticker(ticker)
-            continue
+            result[name] = _nasdaq_ticker(sym, cls)
+            log.info("Nasdaq API OK: %s = %s", name, result[name].get("close"))
         except Exception as e:
+            log.warning("Nasdaq API failed for %s: %s", name, e)
             result[name] = {"error": str(e)}
 
-    # Try 3: CNBC for any still-failed US indices
-    if any("error" in v for v in result.values()):
+    # ── TA-125 via yfinance (Israeli index — not on Nasdaq API) ──
+    ta125_name = 'ת"א 125'
+    ta125_sym  = _YF_TICKERS[ta125_name]
+
+    if _HAS_YFINANCE:
         try:
-            cnbc = _cnbc_all()
-            for name, data in cnbc.items():
-                if "error" in result.get(name, {}):
-                    result[name] = data
-        except Exception:
-            pass
+            result[ta125_name] = _yfinance_ticker(ta125_sym)
+        except Exception as e:
+            log.warning("yfinance failed for TA-125: %s", e)
+            try:
+                result[ta125_name] = _yahoo_ticker(ta125_sym)
+            except Exception as e2:
+                log.warning("Yahoo direct failed for TA-125: %s", e2)
+                result[ta125_name] = {"error": str(e2)}
+    else:
+        try:
+            result[ta125_name] = _yahoo_ticker(ta125_sym)
+        except Exception as e:
+            result[ta125_name] = {"error": str(e)}
 
-    # Save successful data to cache
+    # ── Fallback for any still-failed items: use cache ──
     _save_cache(result)
-
-    # Try 4: Last cached data for anything still failing
     if any("error" in v for v in result.values()):
         cached = _load_cache()
         for name in list(result.keys()):
             if "error" in result.get(name, {}) and name in cached:
                 result[name] = cached[name]
-                log.warning("Using cached market data for %s from %s", name, cached[name].get("_cache_date"))
+                log.warning("Using cached data for %s (from %s)", name, cached[name].get("_cache_date"))
 
     return result
 
@@ -236,7 +248,6 @@ def format_market_for_prompt(data: dict) -> str:
     if not good:
         return "נתוני שוק: לא זמינים כרגע (ייתכן שהבורסה סגורה או שיש בעיית חיבור)"
 
-    # Check if any are from cache
     cached_dates = {v.get("_cache_date") for v in good.values() if v.get("_cache_date")}
     cache_note = f" [נתוני גיבוי מ-{min(cached_dates)}]" if cached_dates else ""
 

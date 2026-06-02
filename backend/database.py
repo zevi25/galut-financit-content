@@ -1,9 +1,14 @@
+import os
 import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "content.db"
+# Railway: mount a volume at /data for persistence across deploys.
+# Locally: use the project root directory.
+_data_dir = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent)))
+_data_dir.mkdir(parents=True, exist_ok=True)
+DB_PATH = _data_dir / "content.db"
 
 # All editable sections with their status columns
 ALL_SECTIONS = [
