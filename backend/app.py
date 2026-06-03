@@ -102,16 +102,17 @@ def generate_section_now(section):
         market_data = data_fetcher.fetch_market_data()
         news = data_fetcher.fetch_globes_news()
 
+        # vary=True → forces different angle/style each time
         generators = {
-            "market_summary":      lambda: content_generator.generate_market_summary(market_data),
-            "investment_tip":      lambda: content_generator.generate_investment_tip(),
-            "news_analysis":       lambda: content_generator.generate_news_analysis(news),
-            "stock_of_week":       lambda: content_generator.generate_stock_of_week(market_data),
-            "investor_psychology": lambda: content_generator.generate_investor_psychology(),
-            "weekly_events":       lambda: content_generator.generate_weekly_events(),
-            "facebook_post":       lambda: content_generator.generate_facebook_post(market_data, news),
-            "instagram_carousel":  lambda: content_generator.generate_instagram_carousel(market_data),
-            "instagram_story":     lambda: content_generator.generate_instagram_story(market_data),
+            "market_summary":      lambda: content_generator.generate_market_summary(market_data, vary=True),
+            "investment_tip":      lambda: content_generator.generate_investment_tip(vary=True),
+            "news_analysis":       lambda: content_generator.generate_news_analysis(news, vary=True),
+            "stock_of_week":       lambda: content_generator.generate_stock_of_week(market_data, vary=True),
+            "investor_psychology": lambda: content_generator.generate_investor_psychology(vary=True),
+            "weekly_events":       lambda: content_generator.generate_weekly_events(vary=True),
+            "facebook_post":       lambda: content_generator.generate_facebook_post(market_data, news, vary=True),
+            "instagram_carousel":  lambda: content_generator.generate_instagram_carousel(market_data, vary=True),
+            "instagram_story":     lambda: content_generator.generate_instagram_story(market_data, vary=True),
         }
 
         if section not in generators:
