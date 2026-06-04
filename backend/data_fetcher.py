@@ -266,7 +266,11 @@ def format_market_for_prompt(data: dict) -> str:
     cached_dates = {v.get("_cache_date") for v in good.values() if v.get("_cache_date")}
     cache_note = f" [נתוני גיבוי מ-{min(cached_dates)}]" if cached_dates else ""
 
-    lines = [f"נתוני שוק (סגירה אחרונה){cache_note}:"]
+    # בדוק אם שעת ישראל היא לפני סגירת וול סטריט (לפני 23:00)
+    hour_il = israel_now().hour
+    us_note = " — וול סטריט עדיין פתוח, אלו נתונים עדכניים לשעה זו" if hour_il < 23 else " — נתוני סגירה סופיים"
+
+    lines = [f"נתוני שוק (הכי עדכני){cache_note}{us_note}:"]
     for name, d in good.items():
         arrow = "📈" if d["change_pct"] >= 0 else "📉"
         sign  = "+" if d["change_pct"] >= 0 else ""

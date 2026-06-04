@@ -53,19 +53,35 @@ def run_market_refresh():
 
 def start(app=None):
     database.init_db()
+
+    # 07:30 — יצירת כל התוכן (טיפ, פסיכולוגיה, מניה, חדשות, פייסבוק, אינסטגרם...)
     _scheduler.add_job(
         run_daily_generation,
         CronTrigger(
             hour=SCHEDULE_HOUR,
             minute=SCHEDULE_MINUTE,
             timezone="Asia/Jerusalem",
-            day_of_week="mon-fri",
+            day_of_week="sun-thu",
         ),
         id="daily_content",
         replace_existing=True,
     )
+
+    # 19:00 — רענון סיכום שוק בלבד (נתוני ת"א סגירה + ארה"ב pre-market)
+    _scheduler.add_job(
+        run_market_refresh,
+        CronTrigger(
+            hour=19,
+            minute=0,
+            timezone="Asia/Jerusalem",
+            day_of_week="sun-thu",
+        ),
+        id="market_refresh_evening",
+        replace_existing=True,
+    )
+
     _scheduler.start()
-    log.info(f"Scheduler started – daily generation at {SCHEDULE_HOUR:02d}:{SCHEDULE_MINUTE:02d} (Sun-Thu)")
+    log.info(f"Scheduler started – full generation at {SCHEDULE_HOUR:02d}:{SCHEDULE_MINUTE:02d}, market refresh at 19:00 (Sun-Thu)")
 
 
 def stop():
